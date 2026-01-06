@@ -25,6 +25,13 @@ public final class DropdownClickGUI extends Screen {
 
     private final List<CategoryPanel> categoryPanelList = new ArrayList<>();
     public static boolean displayingBinds, selectingBind, typingString;
+    
+    // Nuove variabili per il layout moderno
+    private int selectedCategoryIndex = 0;
+    private static final float CATEGORY_PANEL_WIDTH = 120;
+    private static final float CATEGORY_ITEM_HEIGHT = 35;
+    private static final float PADDING = 15;
+    private static final float MODULE_PANEL_X_OFFSET = CATEGORY_PANEL_WIDTH + PADDING * 2;
 
     public DropdownClickGUI() {
         super(Text.empty());
@@ -32,7 +39,6 @@ public final class DropdownClickGUI extends Screen {
         int index = 0;
         for (ModuleCategory category : ModuleCategory.VALUES) {
             categoryPanelList.add(new CategoryPanel(category, index));
-
             index++;
         }
     }
@@ -47,22 +53,40 @@ public final class DropdownClickGUI extends Screen {
 
         displayingBinds = PlayerUtility.isKeyPressed(GLFW.GLFW_KEY_TAB);
 
-        final int categoryAmount = categoryPanelList.size();
-        for (int i = 0; i < categoryAmount; i++) {
+        final int screenWidth = mc.getWindow().getScaledWidth();
+        final int screenHeight = mc.getWindow().getScaledHeight();
+        
+        // Posizione iniziale (centrata verticalmente, offset a sinistra)
+        final float startY = (screenHeight - (categoryPanelList.size() * CATEGORY_ITEM_HEIGHT)) / 2;
+        final float categoryX = PADDING;
+
+        // RENDER CATEGORIE (SINISTRA)
+        for (int i = 0; i < categoryPanelList.size(); i++) {
             final CategoryPanel panel = categoryPanelList.get(i);
+            final float y = startY + i * CATEGORY_ITEM_HEIGHT;
+            
+            // Imposta dimensioni per il pannello categoria (solo visualizzazione nome)
+            panel.setDimensions(categoryX, y, CATEGORY_PANEL_WIDTH, CATEGORY_ITEM_HEIGHT - 5);
+            panel.setSelected(i == selectedCategoryIndex);
+            
+            // Render solo il tab della categoria (non espanso)
+            panel.renderCategoryTab(context, mouseX, mouseY, delta);
+        }
 
-            final float y = 25;
-            final float width = 110;
-            final float spacing = 10;
-            final float height = 20;
-
-            final float totalWidth = categoryAmount * width + (categoryAmount - 1) * spacing;
-
-            final float startX = (mc.getWindow().getScaledWidth() - totalWidth) / 2;
-            final float x = startX + i * (width + spacing);
-
-            panel.setDimensions(x, y, width, height);
-            panel.render(context, mouseX, mouseY, delta);
+        // RENDER MODULI DELLA CATEGORIA SELEZIONATA (DESTRA)
+        if (selectedCategoryIndex >= 0 && selectedCategoryIndex < categoryPanelList.size()) {
+            final CategoryPanel selectedPanel = categoryPanelList.get(selectedCategoryIndex);
+            
+            // Posiziona il pannello moduli a destra
+            selectedPanel.setDimensions(
+                MODULE_PANEL_X_OFFSET, 
+                PADDING, 
+                screenWidth - MODULE_PANEL_X_OFFSET - PADDING, 
+                screenHeight - PADDING * 2
+            );
+            
+            // Render completo dei moduli e settings
+            selectedPanel.render(context, mouseX, mouseY, delta);
         }
 
         if (frameStarted) {
@@ -72,38 +96,72 @@ public final class DropdownClickGUI extends Screen {
 
     @Override
     public boolean mouseClicked(Click click, boolean doubled) {
-        categoryPanelList.forEach(categoryPanel -> categoryPanel.mouseClicked(click.x(), click.y(), click.button()));
+        final double mouseX = click.x();
+        final double mouseY = click.y();
+        final int button = click.button();
+        
+        final int screenHeight = mc.getWindow().getScaledHeight();
+        final float startY = (screenHeight - (categoryPanelList.size() * CATEGORY_ITEM_HEIGHT)) / 2;
+        final float categoryX = PADDING;
+
+        // Check click su categorie (sinistra)
+        for (int i = 0; i < categoryPanelList.size(); i++) {
+            final float y = startY + i * CATEGORY_ITEM_HEIGHT;
+            final float height = CATEGORY_ITEM_HEIGHT - 5;
+            
+            if (mouseX >= categoryX && mouseX <= categoryX + CATEGORY_PANEL_WIDTH &&
+                mouseY >= y && mouseY <= y + height) {
+                selectedCategoryIndex = i;
+                return true;
+            }
+        }
+
+        // Click sui moduli della categoria selezionata (destra)
+        if (selectedCategoryIndex >= 0 && selectedCategoryIndex < categoryPanelList.size()) {
+            categoryPanelList.get(selectedCategoryIndex).mouseClicked(mouseX, mouseY, button);
+        }
 
         return true;
     }
 
     @Override
     public boolean mouseReleased(Click click) {
-        categoryPanelList.forEach(categoryPanel -> categoryPanel.mouseReleased(click.x(), click.y(), click.button()));
-
+        if (selectedCategoryIndex >= 0 && selectedCategoryIndex < categoryPanelList.size()) {
+            categoryPanelList.get(selectedCategoryIndex).mouseReleased(click.x(), click.y(), click.button());
+        }
         return true;
     }
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
-        categoryPanelList.forEach(categoryPanel -> categoryPanel.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount));
-
+        // Solo la categoria selezionata gestisce lo scroll (per i moduli)
+        if (selectedCategoryIndex >= 0 && selectedCategoryIndex < categoryPanelList.size()) {
+            final int screenWidth = mc.getWindow().getScaledWidth();
+            
+            // Check se il mouse è sopra il pannello moduli
+            if (mouseX >= MODULE_PANEL_X_OFFSET && mouseX <= screenWidth - PADDING) {
+                categoryPanelList.get(selectedCategoryIndex).mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
+            }
+        }
         return true;
     }
 
     @Override
     public boolean keyPressed(KeyInput keyInput) {
-        // needed for close functionality
         super.keyPressed(keyInput);
 
-        categoryPanelList.forEach(categoryPanel -> categoryPanel.keyPressed(keyInput));
+        if (selectedCategoryIndex >= 0 && selectedCategoryIndex < categoryPanelList.size()) {
+            categoryPanelList.get(selectedCategoryIndex).keyPressed(keyInput);
+        }
 
         return true;
     }
 
     @Override
     public boolean charTyped(CharInput charInput) {
-        categoryPanelList.forEach(categoryPanel -> categoryPanel.charTyped((char) charInput.codepoint(), charInput.modifiers()));
+        if (selectedCategoryIndex >= 0 && selectedCategoryIndex < categoryPanelList.size()) {
+            categoryPanelList.get(selectedCategoryIndex).charTyped((char) charInput.codepoint(), charInput.modifiers());
+        }
         return true;
     }
 
